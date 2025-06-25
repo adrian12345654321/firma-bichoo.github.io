@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BICHOTATTO - Firma Consentimiento LOPD</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f8; }
+  h1 { color: #5a2a83; }
+  label { display: block; margin-top: 15px; }
+  input { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; }
+  #signature-pad { border: 1px solid #ccc; background: white; margin-top: 10px; }
+  button { margin-top: 15px; background: #5a2a83; color: white; border: none; padding: 10px 20px; cursor: pointer; }
+  button:disabled { background: #aaa; cursor: default; }
+  #message { margin-top: 20px; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<h1>BICHOTATTO - Firma Consentimiento LOPD</h1>
+
+<form id="consent-form">
+  <label>Nombre completo:
+    <input type="text" id="name" required />
+  </label>
+  <label>DNI:
+    <input type="text" id="dni" required />
+  </label>
+  <label>Email:
+    <input type="email" id="email" required />
+  </label>
+  <label>Firma (usa ratón o dedo):</label>
+  <canvas id="signature-pad" width="400" height="150"></canvas>
+  <button type="button" id="clear-btn">Borrar firma</button>
+  <button type="submit" id="send-btn" disabled>Enviar consentimiento</button>
+</form>
+
+<div id="message"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/emailjs-com@3/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+  emailjs.init('pXH5kgUaK_kXaagUg'); // Tu Public Key de EmailJS
+
+  const canvas = document.getElementById('signature-pad');
+  const ctx = canvas.getContext('2d');
+  let drawing = false;
+  let signatureExists = false;
+
+  // Ajustes para retina y claridad
+  function resizeCanvas() {
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    canvas.style.width = canvas.offsetWidth + 'px';
+    canvas.style.height = canvas.offsetHeight + 'px';
+    ctx.scale(ratio, ratio);
+    clearCanvas();
+  }
+  resizeCanvas();
+  window.onresize = resizeCanvas;
+
+  function clearCanvas() {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    signatureExists = false;
+    checkFormReady();
+  }
+
+  function checkFormReady() {
+    const name = document.getElementById('name').value.trim();
+    const dni = document.getElementById('dni').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const sendBtn = document.getElementById('send-btn');
+    sendBtn.disabled = !(name && dni && email && signatureExists);
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    drawing = true;
+    ctx.beginPath();
+    ctx.moveTo(e.offsetX, e.offsetY);
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!drawing) return;
+    ctx.lineTo(e.offsetX, e.offsetY);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    signatureExists = true;
+    checkFormReady();
+  });
+
+  window.addEventListener('mouseup', () => {
+    drawing = false;
+  });
+
+  // Touch events for mobile
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    drawing = true;
+    ctx.beginPath();
+    ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+  });
+
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    if (!drawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    signatureExists = true;
+    checkFormReady();
+  });
+
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    drawing = false;
+  });
+
+  document.getElementById('clear-btn').addEventListener('click', () => {
+    clearCanvas();
+    checkFormReady();
+  });
+
+  document.getElementById('name').addEventListener('input', checkFormReady);
+  document.getElementById('dni').addEventListener('input', checkFormReady);
+  document.getElementById('email').addEventListener('input', checkFormReady);
+
+  document.getElementById('consent-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById('name').value.trim();
+    const dni = document.getElementById('dni').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const dateSigned = new Date().toLocaleString();
+
+    // Generar PDF con jsPDF
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF();
+
+    pdf.setFontSize(16);
+    pdf.text("BICHOTATTO - Consentimiento Protección de Datos", 10, 20);
+    pdf.setFontSize(12);
+    pdf.text(`Nombre: ${name}`, 10, 40);
+    pdf.text(`DNI: ${dni}`, 10, 50);
+    pdf.text(`Email: ${email}`, 10, 60);
+    pdf.text(`Fecha: ${dateSigned}`, 10, 70);
+    pdf.text("En cumplimiento del Reglamento (UE) 2016/679...", 10, 90);
+
+    // Añadir firma al PDF
+    const signatureDataUrl = canvas.toDataURL('image/png');
+    pdf.addImage(signatureDataUrl, 'PNG', 10, 100, 180, 50);
+
+    const pdfBlob = pdf.output('blob');
+    const reader = new FileReader();
+    reader.readAsDataURL(pdfBlob);
+    reader.onloadend = function () {
+      const base64pdf = reader.result.split(',')[1];
+
+      // Enviar email con EmailJS
+      emailjs.send('service_fjjzj77', 'template_kff0b94', {
+        user_name: name,
+        user_dni: dni,
+        user_email: email,
+        user_date: dateSigned,
+        attachment: `data:application/pdf;base64,${base64pdf}`
+      })
+      .then(() => {
+        document.getElementById('message').textContent = "Consentimiento enviado correctamente. ¡Gracias!";
+        document.getElementById('consent-form').reset();
+        clearCanvas();
+        checkFormReady();
+      }, (error) => {
+        document.getElementById('message').textContent = "Error al enviar el consentimiento, intenta de nuevo.";
+        console.error('EmailJS error:', error);
+      });
+    };
+  });
+</script>
+
+</body>
+</html>
